@@ -1,0 +1,240 @@
+
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Juego EKG: Arrastra y coloca cada onda (v2)</title>
+<style>
+  :root{
+    --bg:#0f172a;
+    --card:#111827;
+    --muted:#94a3b8;
+    --text:#e5e7eb;
+    --accent:#22c55e;
+    --accent-2:#ef4444;
+    --accent-3:#3b82f6;
+    --surface:#1f2937;
+  }
+  html,body{height:100%;}
+  body{
+    margin:0;background:#0f172a;color:var(--text);
+    font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Arial;
+    display:flex;align-items:center;justify-content:center;padding:16px;
+  }
+  .app{width:min(1100px,100%);display:grid;gap:16px;}
+  header, .board{border-radius:14px;border:1px solid rgba(148,163,184,0.15);}
+  header{background:rgba(255,255,255,0.04);padding:16px;}
+  header h1{margin:0 0 6px;font-size:clamp(20px, 2.6vw, 28px)}
+  header p{margin:0;color:var(--muted)}
+  .board{background:var(--card);padding:16px;display:grid;gap:16px;}
+  .layout{display:grid;gap:16px;grid-template-columns:1fr}
+  @media(min-width:900px){.layout{grid-template-columns:2.2fr 1fr}}
+  .svg-wrap{position:relative;background:var(--surface);border-radius:12px;border:1px solid rgba(148,163,184,0.15);padding:12px;overflow:hidden}
+  #ekg{display:block;width:100%;height:auto}
+  .overlay{position:absolute;left:12px;top:12px;right:12px;bottom:12px;pointer-events:none}
+  .labels{background:var(--surface);border-radius:12px;border:1px solid rgba(148,163,184,0.15);padding:12px;display:grid;gap:12px;grid-template-columns:repeat(auto-fill,minmax(120px,1fr))}
+  .tile{user-select:none;touch-action:none;background:#0b1220;border:1px solid rgba(148,163,184,0.25);border-radius:10px;padding:10px 12px;font-weight:600;text-align:center;cursor:grab;box-shadow:0 4px 10px rgba(0,0,0,0.25)}
+  .tile:active{cursor:grabbing}
+  .tile[data-placed="true"]{opacity:.7;background:#0e1a30}
+  .zone{fill:transparent;stroke:rgba(59,130,246,0.35);stroke-width:2;rx:8;ry:8}
+  .zone.hover{stroke:rgba(59,130,246,0.75);stroke-dasharray:4 4}
+  .zone.ok{stroke:var(--accent)}
+  .zone.bad{stroke:var(--accent-2)}
+  .chip{position:absolute;pointer-events:auto;transform:translate(-50%,-50%);padding:6px 10px;border-radius:999px;font-weight:700;border:1px solid rgba(148,163,184,0.35);background:#0b1220}
+  .btns{display:flex;gap:10px;flex-wrap:wrap}
+  button{background:linear-gradient(180deg,#1e293b,#0f172a);color:var(--text);border:1px solid rgba(148,163,184,0.25);border-radius:10px;padding:10px 14px;font-weight:600;cursor:pointer}
+  button.primary{border-color:rgba(34,197,94,0.6)}
+  .status{color:var(--muted);font-size:14px}
+  .score{font-weight:700;color:var(--text)}
+  .hint{font-size:13px;color:var(--muted);background:rgba(255,255,255,0.04);border:1px solid rgba(148,163,184,0.15);padding:8px 10px;border-radius:10px}
+  .legend{display:flex;gap:8px;align-items:center;flex-wrap:wrap;color:var(--muted);font-size:13px;margin-top:8px}
+</style>
+</head>
+<body>
+  <div class="app">
+    <header>
+      <h1>EKG: arrastra cada etiqueta a su lugar</h1>
+      <p>Coloca <strong>Onda P</strong>, <strong>Intervalo PR</strong>, <strong>Complejo QRS</strong>, <strong>Segmento ST</strong> y <strong>Onda T</strong> en el ciclo cardíaco.</p>
+    </header>
+    <section class="board">
+      <div class="layout">
+        <div class="svg-wrap" id="svgWrap">
+          <svg id="ekg" viewBox="0 0 900 300" role="img" aria-label="Ciclo cardíaco EKG simplificado">
+            <defs>
+              <pattern id="smallGrid" width="10" height="10" patternUnits="userSpaceOnUse">
+                <path d="M 10 0 L 0 0 0 10" fill="none" stroke="rgba(148,163,184,0.15)" stroke-width="0.8"/>
+              </pattern>
+              <pattern id="grid" width="50" height="50" patternUnits="userSpaceOnUse">
+                <rect width="50" height="50" fill="url(#smallGrid)"/>
+                <path d="M 50 0 L 0 0 0 50" fill="none" stroke="rgba(148,163,184,0.25)" stroke-width="1.6"/>
+              </pattern>
+              <filter id="glow"><feGaussianBlur stdDeviation="2.2" result="coloredBlur"/><feMerge><feMergeNode in="coloredBlur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+            </defs>
+            <rect width="100%" height="100%" fill="url(#grid)"/>
+            <path d="M0,180 L900,180" stroke="#64748b" stroke-width="2" opacity="0.8"/>
+            <path id="wave" d="M 0 180 L 180 180 q 15 -12 30 0 L 300 180 q 10 -22 20 0 L 350 180 L 370 180 q -8 -2 -12 -25 L 382 230 L 388 110 L 398 195 L 420 180 L 520 180 q 15 -10 30 0 q 15 10 30 0 L 820 180 L 900 180" fill="none" stroke="#38bdf8" stroke-width="3" filter="url(#glow)"/>
+            <rect class="zone" id="zone-p"   x="295" y="145" width="60" height="60" rx="8" ry="8" data-accept="P" />
+            <rect class="zone" id="zone-pr"  x="320" y="190" width="70" height="35" rx="8" ry="8" data-accept="PR" />
+            <rect class="zone" id="zone-qrs" x="375" y="110" width="55" height="120" rx="8" ry="8" data-accept="QRS" />
+            <rect class="zone" id="zone-st"  x="430" y="170" width="110" height="30" rx="8" ry="8" data-accept="ST" />
+            <rect class="zone" id="zone-t"   x="540" y="135" width="120" height="80" rx="8" ry="8" data-accept="T" />
+          </svg>
+          <div class="overlay" id="overlay"></div>
+          <div class="legend" aria-hidden="true">
+            <span>Consejo: puedes mover una etiqueta colocada volviendo a arrastrarla desde la lista.</span>
+          </div>
+        </div>
+
+        <div>
+          <div class="labels" id="labels">
+            <div class="tile" draggable="true" data-label="P"   aria-grabbed="false" role="button" tabindex="0">Onda P</div>
+            <div class="tile" draggable="true" data-label="PR"  aria-grabbed="false" role="button" tabindex="0">Intervalo PR</div>
+            <div class="tile" draggable="true" data-label="QRS" aria-grabbed="false" role="button" tabindex="0">Complejo QRS</div>
+            <div class="tile" draggable="true" data-label="ST"  aria-grabbed="false" role="button" tabindex="0">Segmento ST</div>
+            <div class="tile" draggable="true" data-label="T"   aria-grabbed="false" role="button" tabindex="0">Onda T</div>
+          </div>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-top:12px;gap:10px;flex-wrap:wrap">
+            <div class="btns">
+              <button class="primary" id="checkBtn">Comprobar</button>
+              <button id="resetBtn">Reiniciar</button>
+            </div>
+            <div class="status" id="status">Coloca todas las etiquetas y pulsa <span class="score">Comprobar</span>.</div>
+          </div>
+          <div class="hint" style="margin-top:10px">
+            <strong>Pista rápida:</strong> PR va desde el inicio de la P hasta el inicio de QRS. ST es la meseta posterior al QRS.
+          </div>
+        </div>
+      </div>
+    </section>
+    <footer class="hint">Para incrustar: <code>&lt;iframe src="URL" width="100%" height="560" frameborder="0"&gt;&lt;/iframe&gt;</code></footer>
+  </div>
+
+<script>
+(function(){
+  const labels = document.querySelectorAll('.tile');
+  const zones  = document.querySelectorAll('.zone');
+  const status = document.getElementById('status');
+  const checkBtn = document.getElementById('checkBtn');
+  const resetBtn = document.getElementById('resetBtn');
+  const overlay  = document.getElementById('overlay');
+  const svgWrap  = document.getElementById('svgWrap');
+
+  const state = { P:null, PR:null, QRS:null, ST:null, T:null };
+  const chips = {}; // label -> chip element
+
+  // DRAG & DROP mouse
+  labels.forEach(el=>{
+    el.addEventListener('dragstart', e=>{
+      e.dataTransfer.setData('text/plain', el.dataset.label);
+      setTimeout(()=> el.classList.add('dragging'),0);
+    });
+    el.addEventListener('dragend', ()=> el.classList.remove('dragging'));
+  });
+
+  zones.forEach(z=>{
+    z.addEventListener('dragover', e=>{ e.preventDefault(); z.classList.add('hover'); });
+    z.addEventListener('dragleave', ()=> z.classList.remove('hover'));
+    z.addEventListener('drop', e=>{
+      e.preventDefault();
+      z.classList.remove('hover');
+      const label = e.dataTransfer.getData('text/plain');
+      if(label) placeLabelOnZone(label, z);
+    });
+  });
+
+  // TOUCH soporte
+  labels.forEach(el=>{
+    el.addEventListener('touchstart', e=>{ el.style.opacity=.85; }, {passive:true});
+    el.addEventListener('touchend', e=>{
+      el.style.opacity=1;
+      const t = e.changedTouches[0];
+      const target = document.elementFromPoint(t.clientX, t.clientY);
+      const zone = target && (target.classList && target.classList.contains('zone') ? target : target.closest?.('.zone'));
+      if(zone){ placeLabelOnZone(el.dataset.label, zone); }
+    }, {passive:true});
+  });
+
+  function placeLabelOnZone(label, zone){
+    // liberar zona previa si estaba ocupada por otra etiqueta
+    for(const key of Object.keys(state)){
+      if(state[key] && state[key].zone === zone.id){
+        state[key] = null;
+        if(chips[key]){ chips[key].remove(); delete chips[key]; }
+      }
+    }
+    // liberar chip previo de la misma etiqueta
+    if(state[label] && chips[label]){
+      chips[label].remove(); delete chips[label];
+    }
+
+    const el = [...labels].find(x=>x.dataset.label===label);
+    if(!el) return;
+    el.dataset.placed = "true";
+    state[label] = { zone: zone.id, expected: zone.dataset.accept };
+
+    // crear/posicionar chip visual en el centro de la zona
+    const wrapRect = svgWrap.getBoundingClientRect();
+    const zRect = zone.getBoundingClientRect();
+    const cx = zRect.left - wrapRect.left;
+    const cy = zRect.top - wrapRect.top;
+    const chip = document.createElement('div');
+    chip.className = 'chip';
+    chip.textContent = label;
+    chip.style.left = (cx + zRect.width/2) + 'px';
+    chip.style.top  = (cy + zRect.height/2) + 'px';
+    overlay.appendChild(chip);
+    chips[label] = chip;
+
+    pulse(zone, '#3b82f6');
+    setStatus('Etiqueta "'+label+'" colocada. Pulsa Comprobar cuando termines.');
+  }
+
+  function pulse(zone, color){
+    zone.style.transition = 'stroke 0.15s ease';
+    zone.style.stroke = color;
+    setTimeout(()=> { zone.style.stroke = 'rgba(59,130,246,0.35)'; }, 300);
+  }
+
+  function setStatus(msg){ status.innerHTML = msg; }
+
+  checkBtn.addEventListener('click', ()=>{
+    let correct = 0;
+    zones.forEach(z=>{
+      const placedKey = Object.keys(state).find(k => state[k] && state[k].zone === z.id);
+      if(placedKey){
+        if(z.dataset.accept === placedKey){
+          z.classList.remove('bad'); z.classList.add('ok'); correct++;
+        }else{ z.classList.remove('ok'); z.classList.add('bad'); }
+      }else{ z.classList.remove('ok','bad'); }
+    });
+    const total = 5;
+    if(correct===total){ setStatus('✅ ¡Perfecto! Puntaje: <span class="score">'+correct+'/'+total+'</span>'); }
+    else{ setStatus('Resultado: <span class="score">'+correct+'/'+total+'</span>. Revisa las zonas en rojo.'); }
+  });
+
+  resetBtn.addEventListener('click', ()=>{
+    for(const k of Object.keys(state)){ state[k]=null; }
+    for(const k of Object.keys(chips)){ chips[k].remove(); delete chips[k]; }
+    zones.forEach(z=> z.classList.remove('hover','ok','bad'));
+    document.querySelectorAll('.tile').forEach(t=> t.dataset.placed="false");
+    setStatus('Coloca todas las etiquetas y pulsa <span class="score">Comprobar</span>.');
+  });
+
+  // re-posicionar chips si cambia el tamaño (responsivo)
+  window.addEventListener('resize', ()=>{
+    // Recalcular posiciones
+    const wrapRect = svgWrap.getBoundingClientRect();
+    zones.forEach(z=>{
+      const label = Object.keys(state).find(k => state[k] && state[k].zone === z.id);
+      if(!label || !chips[label]) return;
+      const zRect = z.getBoundingClientRect();
+      chips[label].style.left = (zRect.left - wrapRect.left + zRect.width/2) + 'px';
+      chips[label].style.top  = (zRect.top  - wrapRect.top  + zRect.height/2) + 'px';
+    });
+  });
+
+})();
+</script>
+</body>
+</html>
